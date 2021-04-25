@@ -56,6 +56,7 @@ if __name__ == "__main__":
             j += 1
             step += 1 
             print(tf.shape(x_batch))
+            print(blank_batch.shape)
             loss = vae.train_on_batch(x=x_batch, y={'reconstruction': x_batch, 'KL': blank_batch}, return_dict=True)
             [tf.summary.scalar(loss_key, loss_val, step=step) for loss_key, loss_val in loss.items()] 
             if j % 100 == 0:
