@@ -47,7 +47,7 @@ if __name__ == "__main__":
     loss_weights = [1.0, 1.0] # weight both the reconstruction and KL loss the same
     vae.compile(optimizer=vae.optimizer, loss=vae.get_loss(), loss_weights=loss_weights)
     step = 0
-    blank_batch = np.zeros([2*args.z_size])
+    blank_batch = np.zeros([2*args.z_size]) # args.z_size should be set as 50
     for i in range(args.vae_num_epoch):
         j = 0
         for x_batch in ds:
@@ -55,8 +55,6 @@ if __name__ == "__main__":
                 vae._set_inputs(x_batch)
             j += 1
             step += 1 
-            print(tf.shape(x_batch))
-            print(blank_batch.shape)
             loss = vae.train_on_batch(x=x_batch, y={'reconstruction': x_batch, 'KL': blank_batch}, return_dict=True)
             [tf.summary.scalar(loss_key, loss_val, step=step) for loss_key, loss_val in loss.items()] 
             if j % 100 == 0:

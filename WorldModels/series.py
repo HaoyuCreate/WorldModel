@@ -11,9 +11,9 @@ for gpu in gpu_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
 
 args = PARSER.parse_args()
-DATA_DIR = "results/{}/{}/record".format(args.exp_name, args.env_name)
-SERIES_DIR = "results/{}/{}/series".format(args.exp_name, args.env_name)
-model_path_name = "results/{}/{}/tf_vae".format(args.exp_name, args.env_name)
+DATA_DIR = "results/{}/record".format(args.env_name)
+SERIES_DIR = "results/{}/series".format(args.env_name)
+model_path_name = "results/{}/tf_vae".format(args.env_name)
 
 if not os.path.exists(SERIES_DIR):
     os.makedirs(SERIES_DIR)

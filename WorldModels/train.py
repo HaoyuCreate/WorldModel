@@ -10,16 +10,18 @@ from es import CMAES, SimpleGA, OpenES, PEPG
 from utils import PARSER
 import argparse
 import time
+import pdb
 
 ### MPI related code
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
+print('comm',type(comm))
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
   global population, filebase, game, controller, num_params, es, PRECISION, SOLUTION_PACKET_SIZE, RESULT_PACKET_SIZE
   population = num_worker * num_worker_trial
-  filedir = 'results/{}/{}/log/'.format(exp_name, env_name)
+  filedir = 'results/{}/log/'.format(env_name)
   if not os.path.exists(filedir):
       os.makedirs(filedir)
   filebase = filedir+env_name+'.'+optimizer+'.'+str(num_episode)+'.'+str(population)
@@ -196,6 +198,9 @@ def slave():
 
 def send_packets_to_slaves(packet_list):
   num_worker = comm.Get_size()
+  # print(len(packet_list))
+  # print(num_worker)
+  # pdb.set_trace()
   assert len(packet_list) == num_worker-1
   for i in range(1, num_worker):
     packet = packet_list[i-1]
@@ -435,8 +440,11 @@ def mpi_fork(n):
       OMP_NUM_THREADS="1",
       IN_MPI="1"
     )
-    print( ["mpirun", "--allow-run-as-root", "-np", str(n), sys.executable] + sys.argv)
-    subprocess.check_call(["mpirun", "--allow-run-as-root", "-np", str(n), sys.executable] +['-u']+ sys.argv, env=env)
+    #print( ["mpirun", "--allow-run-as-root", "-np", str(n), sys.executable] + sys.argv)
+    print(["mpirun", "-np", str(n), sys.executable] + sys.argv)
+    #subprocess.check_call(["mpirun", "--allow-run-as-root", "-np", str(n), sys.executable] +['-u']+ sys.argv, env=env)
+    subprocess.check_call(["mpirun","-np",str(n),sys.executable]+['-u']+sys.argv,env=env)
+    # when do not have the root previlege, remove the --allow-run-as-root flag
     return "parent"
   else:
     global nworkers, rank

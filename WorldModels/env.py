@@ -37,8 +37,8 @@ class CarRacingMDNRNN(CarRacingWrapper):
     self.rnn = MDNRNN(args)
      
     if load_model:
-      self.vae.set_weights([param_i.numpy() for param_i in tf.saved_model.load('results/{}/{}/tf_vae'.format(args.exp_name, args.env_name)).variables])
-      self.rnn.set_weights([param_i.numpy() for param_i in tf.saved_model.load('results/{}/{}/tf_rnn'.format(args.exp_name, args.env_name)).variables])
+      self.vae.set_weights([param_i.numpy() for param_i in tf.saved_model.load('results/{}/tf_vae'.format(args.env_name)).variables])
+      self.rnn.set_weights([param_i.numpy() for param_i in tf.saved_model.load('results/{}/tf_rnn'.format(args.env_name)).variables])
     self.rnn_states = rnn_init_state(self.rnn)
     
     self.full_episode = False 

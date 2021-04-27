@@ -12,6 +12,8 @@ import time
 
 from rnn.rnn import MDNRNN, sample_vae
 from utils import PARSER
+import pdb
+
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpu_devices:
     tf.config.experimental.set_memory_growth(gpu, True)
@@ -20,8 +22,8 @@ np.set_printoptions(precision=4, edgeitems=6, linewidth=100, suppress=True)
 
 args = PARSER.parse_args()
 
-DATA_DIR = "results/{}/{}/series".format(args.exp_name, args.env_name)
-model_save_path = "results/{}/{}/tf_rnn".format(args.exp_name, args.env_name)
+DATA_DIR = "results/{}/series".format(args.env_name)
+model_save_path = "results/{}/tf_rnn".format(args.env_name)
 if not os.path.exists(model_save_path):
   os.makedirs(model_save_path)
 with open(model_save_path + '/args.json', 'w') as f:
@@ -38,12 +40,12 @@ data_N = raw_data["N"]
 N_data = len(data_mu) # should be 10k
 
 # save 1000 initial mu and logvars. Used for sampling when training in dreams
-initial_z_save_path = "results/{}/{}/tf_initial_z".format(args.exp_name, args.env_name)
+initial_z_save_path = "results/{}/tf_initial_z".format(args.exp_name, args.env_name)
 if not os.path.exists(initial_z_save_path):
   os.makedirs(initial_z_save_path)
 initial_mu = []
 initial_logvar = []
-for i in range(1000):
+for i in range(640): # setting 1000 to 640 since we change the vae_batch_size=64
   mu = np.copy(data_mu[i][0, :]*10000).astype(np.int).tolist()
   logvar = np.copy(data_logvar[i][0, :]*10000).astype(np.int).tolist()
   initial_mu.append(mu)
