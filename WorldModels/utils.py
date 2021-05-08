@@ -22,6 +22,12 @@ PARSER.add('--vae_learning_rate', required=True, type=float, help='vae learning 
 PARSER.add('--vae_kl_tolerance', required=True, type=float, help='vae kl tolerance for clipping')
 PARSER.add('--vae_num_epoch', required=True, type=int, help='vae num epoch for training')
 
+PARSER.add('--vae_gan_DEPTH', required=True, type=int)
+PARSER.add('--vae_gan_LATENT_DEPTH', required=True, type=int)
+PARSER.add('--vae_gan_learning_rate', required=True, type=float, help='vae gan learning rate')
+PARSER.add('--vae_gan_batch_size', required=True, type=int, help='batch size for vae gan train')
+PARSER.add('--vae_gan_num_epoch', required=True, type=int, help='vae gan num epoch for training')
+
 PARSER.add('--rnn_num_steps', required=True, type=int, help='number of rnn training steps') 
 PARSER.add('--rnn_max_seq_len', required=True, type=int, help='sequence lenght to train rnn on') 
 PARSER.add('--rnn_r_pred', required=True, type=int, help='predict reward if 1 dont if 0') 

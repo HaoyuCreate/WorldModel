@@ -8,12 +8,14 @@ import gc
 from PIL import Image
 from gym.spaces.box import Box
 from gym.envs.box2d.car_racing import CarRacing
+from pyglet.window import key
 
 class CarRacingWrapper(CarRacing):
   def __init__(self, full_episode=False):
     super(CarRacingWrapper, self).__init__()
     self.full_episode = full_episode
-    self.observation_space = Box(low=0, high=255, shape=(64, 64, 3)) # , dtype=np.uint8
+    #self.observation_space = Box(low=0, high=255, shape=shape, dtype=np.uint8) # , dtype=np.uint8
+    self.observation_space = Box(low=0, high=100, shape=tuple([64,64,3])) # , dtype=np.uint8
 
   def _process_frame(self, frame):
     obs = frame[0:84, :, :]
@@ -29,6 +31,7 @@ class CarRacingWrapper(CarRacing):
 
 from vae.vae import CVAE
 from rnn.rnn import MDNRNN, rnn_next_state, rnn_init_state
+
 class CarRacingMDNRNN(CarRacingWrapper):
   def __init__(self, args, load_model=True, full_episode=False, with_obs=False):
     super(CarRacingMDNRNN, self).__init__(full_episode=full_episode)
@@ -78,6 +81,68 @@ class CarRacingMDNRNN(CarRacingWrapper):
     super(CarRacingMDNRNN, self).close()
     tf.keras.backend.clear_session()
     gc.collect()
+
+def make_env(args, dream_env=False, seed=-1, render_mode=False, full_episode=False, with_obs=False, load_model=True):
+  # if args.env_name == 'DoomTakeCover-v0':
+  #   if dream_env:
+  #     print('making rnn doom environment')
+  #     env = DreamDoomTakeCoverMDNRNN(args=args, render_mode=render_mode, load_model=load_model)
+  #   else:
+  #     print('making real doom environment')
+  #     env = DoomTakeCoverMDNRNN(args=args, render_mode=render_mode, load_model=load_model, with_obs=with_obs)
+  # else:
+  #   if dream_env:
+  #     raise ValueError('training in dreams for carracing is not yet supported')
+  #   else:
+  print('making real CarRacing environment')
+  env = CarRacingMDNRNN(args=args, full_episode=full_episode, with_obs=with_obs, load_model=load_model)
+  if (seed >= 0):
+    env.seed(seed)
+  return env
+
+def run_caracing_by_hunman():
+  a = np.array( [0.0, 0.0, 0.0] )
+  def key_press(k, mod):
+    global restart
+    if k==0xff0d: restart = True
+    if k==key.LEFT:  a[0] = -1.0
+    if k==key.RIGHT: a[0] = +1.0
+    if k==key.UP:    a[1] = +1.0
+    if k==key.DOWN:  a[2] = +0.8   # set 1.0 for wheels to block to zero rotation
+  def key_release(k, mod):
+    if k==key.LEFT  and a[0]==-1.0: a[0] = 0
+    if k==key.RIGHT and a[0]==+1.0: a[0] = 0
+    if k==key.UP:    a[1] = 0
+    if k==key.DOWN:  a[2] = 0
+  env = CarRacing()
+  env.render()
+  env.viewer.window.on_key_press = key_press
+  env.viewer.window.on_key_release = key_release
+  while True:
+    env.reset()
+    total_reward = 0.0
+    steps = 0
+    restart = False
+    while True:
+      s, r, done, info = env.step(a)
+      total_reward += r
+      if steps % 200 == 0 or done:
+        print("\naction " + str(["{:+0.2f}".format(x) for x in a]))
+        print("step {} total_reward {:+0.2f}".format(steps, total_reward))
+      steps += 1
+      env.render()
+      if done or restart: break
+  env.monitor.close()
+
+
+if __name__=='__main__':
+  import configargparse
+  from utils import PARSER
+  args = PARSER.parse_args()
+
+  #true_env = make_env(args, dream_env=False, with_obs=True)
+  run_caracing_by_hunman()
+  
 
 # from ppaquette_gym_doom.doom_take_cover import DoomTakeCoverEnv
 # from gym.utils import seeding
@@ -257,22 +322,4 @@ class CarRacingMDNRNN(CarRacingWrapper):
 
 #   def render(self, mode):
 #     pass
-
-def make_env(args, dream_env=False, seed=-1, render_mode=False, full_episode=False, with_obs=False, load_model=True):
-  # if args.env_name == 'DoomTakeCover-v0':
-  #   if dream_env:
-  #     print('making rnn doom environment')
-  #     env = DreamDoomTakeCoverMDNRNN(args=args, render_mode=render_mode, load_model=load_model)
-  #   else:
-  #     print('making real doom environment')
-  #     env = DoomTakeCoverMDNRNN(args=args, render_mode=render_mode, load_model=load_model, with_obs=with_obs)
-  # else:
-  #   if dream_env:
-  #     raise ValueError('training in dreams for carracing is not yet supported')
-  #   else:
-  print('making real CarRacing environment')
-  env = CarRacingMDNRNN(args=args, full_episode=full_episode, with_obs=with_obs, load_model=load_model)
-  if (seed >= 0):
-    env.seed(seed)
-  return env
 
