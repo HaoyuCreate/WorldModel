@@ -30,13 +30,6 @@ Ground Truth Environment (DoomTakeCover)   |  Dream Environment
 ## Reproducing Results From Scratch
 These instructions assume a machine with a 64 core cpu and a gpu. If running in the cloud it will likely financially make more sense to run the extraction and controller processes on a cpu machine and the VAE, preprocessing, and RNN tasks on a GPU machine.
 
-### DoomTakeCover-v0
-**CAUTION** The doom environment leaves some processes hanging around. In addition to running the doom experiments, the script kills processes including 'vizdoom' in the name (be careful with this if you are not running in a container).
-To reproduce results for DoomTakeCover-v0 run the following bash script.
-```
-bash launch_scripts/wm_doom.bash
-```
-
 ### CarRacing-v0
 To reproduce results for CarRacing-v0 run the following bash script
 ```
