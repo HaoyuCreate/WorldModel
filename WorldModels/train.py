@@ -15,7 +15,7 @@ import pdb
 ### MPI related code
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
-print('comm',type(comm))
+print('rank',rank)
 ###
 
 def initialize_settings(sigma_init=0.1, sigma_decay=0.9999):
@@ -159,7 +159,7 @@ def worker(weights, seed, train_mode_int=1, max_len=-1):
   if train_mode_int == 1: # train with DREAM env
     env._training = train_mode
     reward_list, t_list = simulate(controller, env,
-	    train_mode=train_mode, render_mode=False, num_episode=num_episode, seed=seed, max_len=max_len)
+      train_mode=train_mode, render_mode=False, num_episode=num_episode, seed=seed, max_len=max_len)
   elif train_mode_int == 0: # eval with DREAM env
     env._training = True #train_mode
     reward_list, t_list = simulate(controller, env,
@@ -198,9 +198,6 @@ def slave():
 
 def send_packets_to_slaves(packet_list):
   num_worker = comm.Get_size()
-  # print(len(packet_list))
-  # print(num_worker)
-  # pdb.set_trace()
   assert len(packet_list) == num_worker-1
   for i in range(1, num_worker):
     packet = packet_list[i-1]
@@ -228,7 +225,7 @@ def receive_packets_from_slaves():
   check_sum = check_results.sum()
   assert check_sum == 0, check_sum
   return reward_list_total
-	
+  
 def evaluate_batch(model_params, train_mode, max_len=-1):
   # runs only from master since mpi and Doom was janky
   if args.env_name == 'DoomTakeCover-v0' and train_mode==-1: # can't run the real environment in parallel for doom
@@ -295,6 +292,8 @@ def master():
       seeds = seeder.next_batch(es.popsize)
     packet_list = encode_solution_packets(seeds, solutions, max_len=max_len)
 
+    print('seed',len(seeds),seeds)
+    print('packet_list ',len(packet_list),'content length ',len(packet_list[0]))
     send_packets_to_slaves(packet_list)
     
     response_list_total = receive_packets_from_slaves()
@@ -455,5 +454,5 @@ def mpi_fork(n):
 
 if __name__ == "__main__":
   args = PARSER.parse_args()
-  if "parent" == mpi_fork(args.controller_num_worker+1): os.exit()
+  if "parent" == mpi_fork(args.controller_num_worker+1): os._exit(0)
   main(args)

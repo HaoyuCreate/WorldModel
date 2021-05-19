@@ -10,7 +10,7 @@ docker attach wm
 ```
 
 ## Visualizations
-To visualize the environment from the agents perspective or generate synthetic observations use the [visualizations jupyter notebook](WorldModels/visualizations.ipynb). It can be launched from your container with the following:
+To visualize the environment from the agents perspective or generate synthetic observations use the [visualizations jupyter notebook](WorldModels/car_racing.ipynb). It can be launched from your container with the following:
 ```
 jupyter notebook --no-browser --port=8888 --ip=0.0.0.0 --allow-root
 ```
@@ -27,6 +27,37 @@ To reproduce results for CarRacing-v0 run the following bash script
 ```
 bash launch_scripts/carracing.bash
 ```
+### Train the models sperately
+Reproduce VAE-based pipeline
+Note:
+1. install the required libraries one by one:
+    i. conda install mp4pi --> can not install all gym envorinment
+    ii. pip install gym['all'] --> solve issue that gym cannot find '2D_box' module
+
+2. vae_train.py
+    i. comment line #9-11, no OS and sys environement should be changed --> solve issue that 'WM' diretory is not found
+    ii. in .config file, line #13: set vae_batch_size=64 # should match vae_batch_size = 2 * z_size --> solve issue that 'Ambigious data size between x_batch and '
+
+3. seris.py
+
+4. rnn_train.py
+    i. pip install tf-nightly--> solve 
+        TypeError: function() got an unexpected keyword argument 'jit_compile'
+    
+    ii. line #48 set range(1000) as range(640), since we change the vae_batch_size=64 --> solve
+    Traceback (most recent call last):
+        File "rnn_train.py", line 47, in <module>
+        IndexError: index 640 is out of bounds for axis 0 with size 640
+
+5. train.py
+    i. make sure you install mpi4py sucessfully
+
+
+VAE-GAN-based pipeline
+1. vaegan_train.py
+2. seris.py
+3. rnn_train_vaegan.py
+4. train.py
 
 ## Disclaimer
 I have not run this for long enough(~45 days wall clock time) to verify that we produce the same results on CarRacing-v0 as the original implementation.
@@ -34,6 +65,7 @@ I have not run this for long enough(~45 days wall clock time) to verify that we 
 Average return curves comparing the original implementation and ours. The shaded area represents a standard deviation above and below the mean. 
 
 ![alt text](imgs/og_carracing_comparison.png "CarRacing-v0 comparison")
+![alt text](imgs/6613_VAE_Reward_results.png "CarRacing-v0 with our result")
 
 For simplicity, the Doom experiment implementation is slightly different than the original
 * We do not use weighted cross entropy loss for done predictions 

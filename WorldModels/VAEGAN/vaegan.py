@@ -1,220 +1,184 @@
-from keras.models import Sequential, Model
-from keras.layers import *
-from keras.optimizers import *
+import tensorflow.keras as keras
 import os
-from keras import metrics, backend as K
-from PIL import Image
 import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import datetime
+import sys
+import pdb
 
-filenames = list()
-labels = list()
 
-images = os.path.join("img_align_celeba_png/")
-annot = os.path.join("list_attr_celeba_png.txt")
 
-with open(annot) as in_file:
-    count_datapoints = int(in_file.readline())
-    plaintext_labels = in_file.readline().split()
-
-    for line in in_file:
-        splitted = line.split()
-
-        filenames.append(os.path.join(images, splitted[0]))
-
-        properties_celebrity = [float(x) for x in splitted[1:]]
-        properties_celebrity = [max(0.0, x) for x in properties_celebrity]
-        labels.append(properties_celebrity)
-assert len(filenames) == len(labels)
-
-# print(labels[:4])
-# print(filenames[:4])
-
-show_number = len(filenames)
-datasetlist = []
-# print(plaintext_labels)
-for filename, properties in zip(filenames[:show_number], labels[:show_number]):
-    image = Image.open(os.path.join(filename))
-    image = image.resize([64, 64], Image.ANTIALIAS)
-    image = (np.array(image) - 127.5 / 127.5)
-    #	image = plt.imread(image)
-    #	plt.imshow(image)
-    # plt.show()
-    datasetlist.append(image)
-    print(filename)
-    # print(properties)
-
-dataset = np.array(datasetlist)
-print(dataset.shape)
-
+K_SIZE = 5
+inner_loss_coef = 1
+normal_coef = 0.1
+kl_coef = 0.01
 
 def sampling(args):
     mean, logsigma = args
-    epsilon = K.random_normal(shape=(K.shape(mean)[0], 512), mean=0., stddev=1.0)
-    return mean + K.exp(logsigma / 2) * epsilon
+    epsilon = keras.backend.random_normal(shape=keras.backend.shape(mean))
+    return mean + tf.exp(logsigma / 2) * epsilon
 
 
-def encoder(kernel, filter, rows, columns, channel):
-    X = Input(shape=(rows, columns, channel))
-    model = Conv2D(filters=filter, kernel_size=kernel, strides=2, padding='same')(X)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = LeakyReLU(alpha=0.2)(model)
-
-    model = Conv2D(filters=filter*2, kernel_size=kernel, strides=2, padding='same')(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = LeakyReLU(alpha=0.2)(model)
-
-    model = Conv2D(filters=filter*4, kernel_size=kernel, strides=2, padding='same')(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = LeakyReLU(alpha=0.2)(model)
-
-    model = Conv2D(filters=filter*8, kernel_size=kernel, strides=2, padding='same')(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = LeakyReLU(alpha=0.2)(model)
-
-    model = Flatten()(model)
-
-    mean = Dense(512)(model)
-    logsigma = Dense(512, activation='tanh')(model)
-    latent = Lambda(sampling, output_shape=(512,))([mean, logsigma])
-    meansigma = Model([X], [mean, logsigma, latent])
-    return meansigma
 
 
-def decgen(kernel, filter, rows, columns, channel):
-    X = Input(shape=(512,))
-
-    model = Dense(filter*8*rows*columns)(X)
-    model = Reshape((rows, columns, filter * 8))(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = Activation('relu')(model)
-
-    model = Conv2DTranspose(filters=filter*4, kernel_size=kernel, strides=2, padding='same')(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = Activation('relu')(model)
-
-    model = Conv2DTranspose(filters=filter*2, kernel_size=kernel, strides=2, padding='same')(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = Activation('relu')(model)
-
-    model = Conv2DTranspose(filters=filter, kernel_size=kernel, strides=2, padding='same')(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = Activation('relu')(model)
-
-    model = Conv2DTranspose(filters=channel, kernel_size=kernel, strides=2, padding='same')(model)
-    model = Activation('tanh')(model)
-
-    model = Model(X, model)
-    return model
+class VAEGAN(tf.keras.Model):
+    def __init__(self,lr=0.0001,args=None):
+        super(VAEGAN, self).__init__()
+        self.batch_size = args.vae_gan_batch_size
+        self.DEPTH = args.vae_gan_DEPTH
+        self.LATENT_DEPTH = args.vae_gan_LATENT_DEPTH
 
 
-def discriminator(kernel, filter, rows, columns, channel):
-    X = Input(shape=(rows, columns, channel))
 
-    model = Conv2D(filters=filter*2, kernel_size=kernel, strides=2, padding='same')(X)
-    model = LeakyReLU(alpha=0.2)(model)
+        self.E = self.encoder()
+        self.G = self.generator()
+        self.D = self.discriminator()
 
-    model = Conv2D(filters=filter*4, kernel_size=kernel, strides=2, padding='same')(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = LeakyReLU(alpha=0.2)(model)
-
-    model = Conv2D(filters=filter*8, kernel_size=kernel, strides=2, padding='same')(model)
-    model = BatchNormalization(epsilon=1e-5)(model)
-    model = LeakyReLU(alpha=0.2)(model)
-
-    model = Conv2D(filters=filter*8, kernel_size=kernel, strides=2, padding='same')(model)
+        self.E_opt = keras.optimizers.Adam(learning_rate=lr)
+        self.G_opt = keras.optimizers.Adam(learning_rate=lr)
+        self.D_opt = keras.optimizers.Adam(learning_rate=lr)
 
 
-    dec = BatchNormalization(epsilon=1e-5)(model)
-    dec = LeakyReLU(alpha=0.2)(dec)
-    dec = Flatten()(dec)
-    dec = Dense(1, activation='sigmoid')(dec)
+    def encoder(self):
+        input_E = keras.layers.Input(shape=(64, 64, 3))
+        
+        X = keras.layers.Conv2D(filters=self.DEPTH*2, kernel_size=K_SIZE, strides=2, padding='same')(input_E)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
 
-    output = Model([X], [dec, model])
-    return output
+        X = keras.layers.Conv2D(filters=self.DEPTH*4, kernel_size=K_SIZE, strides=2, padding='same')(X)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+
+        X = keras.layers.Conv2D(filters=self.DEPTH*8, kernel_size=K_SIZE, strides=2, padding='same')(X)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        
+        X = keras.layers.Flatten()(X)
+        X = keras.layers.Dense(self.LATENT_DEPTH)(X)    
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        
+        mean = keras.layers.Dense(self.LATENT_DEPTH,activation="tanh")(X)
+        logsigma = keras.layers.Dense(self.LATENT_DEPTH,activation="tanh")(X)
+        latent = keras.layers.Lambda(sampling, output_shape=(self.LATENT_DEPTH,))([mean, logsigma])
+        
+        kl_loss = 1 + logsigma - keras.backend.square(mean) - keras.backend.exp(logsigma)
+        kl_loss = keras.backend.mean(kl_loss, axis=-1)
+        kl_loss *= -0.5
+        return keras.models.Model(input_E, [latent,kl_loss])
+
+    def generator(self):
+        input_G = keras.layers.Input(shape=(self.LATENT_DEPTH,))
+
+        X = keras.layers.Dense(8*8*self.DEPTH*8)(input_G)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        X = keras.layers.Reshape((8, 8, self.DEPTH * 8))(X)
+        
+        X = keras.layers.Conv2DTranspose(filters=self.DEPTH*8, kernel_size=K_SIZE, strides=2, padding='same')(X)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+
+        X = keras.layers.Conv2DTranspose(filters=self.DEPTH*4, kernel_size=K_SIZE, strides=2, padding='same')(X)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        
+        X = keras.layers.Conv2DTranspose(filters=self.DEPTH, kernel_size=K_SIZE, strides=2, padding='same')(X)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        
+        X = keras.layers.Conv2D(filters=3, kernel_size=K_SIZE, padding='same')(X)
+        X = keras.layers.Activation('sigmoid')(X)
+        return keras.models.Model(input_G, X)
+
+    def discriminator(self):
+        input_D = keras.layers.Input(shape=(64, 64, 3))
+        
+        X = keras.layers.Conv2D(filters=self.DEPTH, kernel_size=K_SIZE, strides=2, padding='same')(input_D)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        
+        X = keras.layers.Conv2D(filters=self.DEPTH*4, kernel_size=K_SIZE, strides=2, padding='same')(input_D)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        X = keras.layers.BatchNormalization()(X)
+
+        X = keras.layers.Conv2D(filters=self.DEPTH*8, kernel_size=K_SIZE, strides=2, padding='same')(X)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+
+        X = keras.layers.Conv2D(filters=self.DEPTH*8, kernel_size=K_SIZE, padding='same')(X)
+        inner_output = keras.layers.Flatten()(X)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        
+        X = keras.layers.Flatten()(X)
+        X = keras.layers.Dense(self.DEPTH*8)(X)
+        X = keras.layers.BatchNormalization()(X)
+        X = keras.layers.LeakyReLU(alpha=0.2)(X)
+        
+        output = keras.layers.Dense(1)(X)    
+        return keras.models.Model(input_D, [output, inner_output])
+
+    @tf.function
+    def train_step_vaegan(self,x):
+        lattent_r =  tf.random.normal((self.batch_size, self.LATENT_DEPTH))
+        with tf.GradientTape(persistent=True) as tape:
+            lattent,kl_loss = self.E(x)
+            fake = self.G(lattent)
+            dis_fake,dis_inner_fake = self.D(fake)
+            dis_fake_r,_ = self.D(self.G(lattent_r))
+            dis_true,dis_inner_true = self.D(x)
 
 
-batch_size = 512
-rows = 64
-columns = 64
-channel = 3
-epochs = 20000
-datasize = len(dataset)
-noise = np.random.normal(0, 1, (batch_size, 256))
-# optimizers
-SGDop = SGD(lr=0.0003)
-ADAMop = Adam(lr=0.0002)
-# encoder
-E = encoder(5, 32, rows, columns, channel)
-E.compile(optimizer=SGDop, loss='mse')
-E.summary()
-# generator/decoder
-G = decgen(5, 32, rows, columns, channel)
-G.compile(optimizer=SGDop, loss='mse')
-G.summary()
-# discriminator
-D = discriminator(5, 32, rows, columns, channel)
-D.compile(optimizer=SGDop, loss='mse')
-D.summary()
-D_fixed = discriminator(5, 32, rows, columns, channel)
-D_fixed.compile(optimizer=SGDop, loss='mse')
-# VAE
-X = Input(shape=(rows, columns, channel))
-# latent_rep = E(X)[0]
-# output = G(latent_rep)
-E_mean, E_logsigma, Z = E(X)
+            vae_inner = dis_inner_fake-dis_inner_true
+            vae_inner = vae_inner*vae_inner
+            
+            mean,var = tf.nn.moments(self.E(x)[0], axes=0)
+            var_to_one = var - 1
+            
+            normal_loss = tf.reduce_mean(mean*mean) + tf.reduce_mean(var_to_one*var_to_one)
+            
+            kl_loss = tf.reduce_mean(kl_loss)
+            vae_diff_loss = tf.reduce_mean(vae_inner)
+            f_dis_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(tf.zeros_like(dis_fake), dis_fake))
+            r_dis_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(tf.zeros_like(dis_fake_r), dis_fake_r))
+            t_dis_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(tf.ones_like(dis_true), dis_true))
+            gan_loss = (0.5*t_dis_loss + 0.25*f_dis_loss + 0.25*r_dis_loss)
+            vae_loss = tf.reduce_mean(tf.abs(x-fake)) 
+            E_loss = vae_diff_loss + kl_coef*kl_loss + normal_coef*normal_loss
+            G_loss = inner_loss_coef*vae_diff_loss - gan_loss
+            D_loss = gan_loss
 
-# Z = Input(shape=(512,))
-# Z2 = Input(shape=(batch_size, 512))
+        E_grad = tape.gradient(E_loss,self.E.trainable_variables)
+        G_grad = tape.gradient(G_loss,self.G.trainable_variables)
+        D_grad = tape.gradient(D_loss,self.D.trainable_variables)
 
-output = G(Z)
-G_dec = G(E_mean + E_logsigma)
-D_fake, F_fake = D(output)
-D_fromGen, F_fromGen = D(G_dec)
-D_true, F_true = D(X)
+        del tape
+        self.E_opt.apply_gradients(zip(E_grad, self.E.trainable_variables))
+        self.G_opt.apply_gradients(zip(G_grad, self.G.trainable_variables))
+        self.D_opt.apply_gradients(zip(D_grad, self.D.trainable_variables))
 
-VAE = Model(X, output)
-kl = - 0.5 * K.sum(1 + E_logsigma - K.square(E_mean) - K.exp(E_logsigma), axis=-1)
-crossent = 64 * metrics.mse(K.flatten(X), K.flatten(output))
-VAEloss = K.mean(crossent + kl)
-VAE.add_loss(VAEloss)
-VAE.compile(optimizer=SGDop)
+        return [E_loss,G_loss,D_loss],[gan_loss, vae_loss, f_dis_loss, r_dis_loss, t_dis_loss, vae_diff_loss, kl_loss, normal_loss]
 
-for epoch in range(epochs):
-    latent_vect = E.predict(dataset)[0]
-    encImg = G.predict(latent_vect)
-    fakeImg = G.predict(noise)
+if __name__=='__main__':
+    
+    class Args():
+        def __init__(self):
+            self.vae_gan_DEPTH = 32
+            self.vae_gan_LATENT_DEPTH = 256
+            self.vae_gan_batch_size = 4
 
-    DlossTrue = D_true.train_on_batch(dataset, np.ones((batch_size, 1)))
-    DlossEnc = D_fromGen.train_on_batch(encImg, np.ones((batch_size, 1)))
-    DlossFake = D_fake.train_on_batch(fakeImg, np.zeros((batch_size, 1)))
+    args = Args()
+    print(args)
+    vaegan = VAEGAN(lr=0.0001,args=args)
+    E = vaegan.encoder()
+    G = vaegan.generator()
+    D = vaegan.discriminator()
+    x = tf.random.normal([4,64,64,3])
+    print(E(x)[0].shape)
+    # print(G(tf.random.normal([4,512,])).shape)
+    # print(D(x))
 
-    cnt = epoch
-    while cnt > 3:
-        cnt = cnt - 4
-
-    if cnt == 0:
-        GlossEnc = G.train_on_batch(latent_vect, np.ones((batch_size, 1)))
-        GlossGen = G.train_on_batch(noise, np.ones((batch_size, 1)))
-        Eloss = VAE.train_on_batch(dataset, None)
-
-    chk = epoch
-
-    while chk > 50:
-        chk = chk - 51
-
-    if chk == 0:
-        D.save_weights('discriminator.h5')
-        G.save_weights('generator.h5')
-        E.save_weights('encoder.h5')
-
-    print("epoch number", epoch + 1)
-    print("loss:")
-    print("D:", DlossTrue, DlossEnc, DlossFake)
-    print("G:", GlossEnc, GlossGen)
-    print("VAE:", Eloss)
-
-print('Training done,saving weights')
-D.save_weights('discriminator.h5')
-G.save_weights('generator.h5')
-E.save_weights('encoder.h5')
-print('end')
+    # loss_list = vaegan.train_step_vaegan(x)
+    # print(loss_list)

@@ -40,7 +40,7 @@ data_N = raw_data["N"]
 N_data = len(data_mu) # should be 10k
 
 # save 1000 initial mu and logvars. Used for sampling when training in dreams
-initial_z_save_path = "results/{}/tf_initial_z".format(args.exp_name, args.env_name)
+initial_z_save_path = "results/{}/tf_initial_z".format(args.env_name)
 if not os.path.exists(initial_z_save_path):
   os.makedirs(initial_z_save_path)
 initial_mu = []

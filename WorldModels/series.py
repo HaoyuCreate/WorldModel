@@ -5,6 +5,7 @@ import tensorflow as tf
 import random
 from vae.vae import CVAE
 from utils import PARSER
+import pdb
 
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpu_devices:
@@ -84,6 +85,7 @@ for batch in dataset:
   d = tf.reshape(d, [-1, 1])
   N = tf.reshape(N, [-1, 1])
 
+  
   mu, logvar = encode_batch(obs_batch)
 
   mu_dataset.append(mu.numpy().astype(np.float16))
